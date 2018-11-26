@@ -1,4 +1,4 @@
-package alog
+package aLog
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// log level
 const (
 	logLevelFatal = iota
 	logLevelError
@@ -14,8 +15,10 @@ const (
 	logLevelDebug
 )
 
-var logLevelStr = []string{"Fatal", "Error", "warning", "Info", "Debug"}
+// log level names
+var logLevelStr = []string{"Fatal", "Error", "Warning", "Info", "Debug"}
 
+// one log msg
 type logMsg struct {
 	ts    time.Time
 	level int
@@ -23,7 +26,8 @@ type logMsg struct {
 	next  *logMsg
 }
 
-type alog struct {
+// the log class
+type aLog struct {
 	header *logMsg
 	tail   *logMsg
 	mutex  sync.Mutex
@@ -35,53 +39,57 @@ type alog struct {
 	stop   bool
 }
 
-var Log = &alog{}
+// the log instance
+var aLogIns = &aLog{}
 
 func init() {
-	Log.cond = sync.NewCond(&Log.mutex)
-	Log.level = logLevelDebug
-	Log.maxNum = 10000
-	go Log.worker()
+	aLogIns.cond = sync.NewCond(&aLogIns.mutex)
+	aLogIns.level = logLevelDebug
+	aLogIns.maxNum = 10000
+	go aLogIns.worker()
 }
 
+// stop log
 func Stop() {
-	Log.mutex.Lock()
-	Log.stop = true
-	Log.mutex.Unlock()
+	aLogIns.mutex.Lock()
+	aLogIns.stop = true
+	aLogIns.mutex.Unlock()
 
-	Log.cond.Signal()
-	Log.wg.Wait()
+	aLogIns.cond.Signal()
+	aLogIns.wg.Wait()
 }
 
+// set log level, all logs big than level will not output
 func SetLevel(level int) {
-	Log.level = level
+	aLogIns.level = level
 }
 
+// set max queued log number
 func SetMaxNum(maxNum int) {
-	Log.maxNum = maxNum
+	aLogIns.maxNum = maxNum
 }
 
 func Fatal(format string, a ...interface{}) {
-	Log.add(logLevelFatal, format, a...)
+	aLogIns.add(logLevelFatal, format, a...)
 }
 
 func Error(format string, a ...interface{}) {
-	Log.add(logLevelError, format, a...)
+	aLogIns.add(logLevelError, format, a...)
 }
 
 func Warning(format string, a ...interface{}) {
-	Log.add(logLevelWarning, format, a...)
+	aLogIns.add(logLevelWarning, format, a...)
 }
 
 func Info(format string, a ...interface{}) {
-	Log.add(logLevelInfo, format, a...)
+	aLogIns.add(logLevelInfo, format, a...)
 }
 
 func Debug(format string, a ...interface{}) {
-	Log.add(logLevelDebug, format, a...)
+	aLogIns.add(logLevelDebug, format, a...)
 }
 
-func (self *alog) worker() {
+func (self *aLog) worker() {
 	self.wg.Add(1)
 	for {
 		self.mutex.Lock()
@@ -103,7 +111,7 @@ func (self *alog) worker() {
 	self.wg.Done()
 }
 
-func (self *alog) skip(level int) bool {
+func (self *aLog) skip(level int) bool {
 	if level > self.level {
 		// skip log when level disabled
 		return true
@@ -112,7 +120,7 @@ func (self *alog) skip(level int) bool {
 	return false
 }
 
-func (self *alog) add(level int, format string, a ...interface{}) {
+func (self *aLog) add(level int, format string, a ...interface{}) {
 	if self.skip(level) {
 		return
 	}
@@ -136,7 +144,7 @@ func (self *alog) add(level int, format string, a ...interface{}) {
 	self.cond.Signal()
 }
 
-func (self *alog) process(header *logMsg) {
+func (self *aLog) process(header *logMsg) {
 	for header != nil {
 		if !self.skip(header.level) {
 			fmt.Printf("[%s][%s]%s\n", header.ts.Format("2006-01-02 15:04:05.000"), logLevelStr[header.level], header.msg)
